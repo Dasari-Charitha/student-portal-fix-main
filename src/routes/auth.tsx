@@ -151,12 +151,6 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
 
   async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (roleTab === "admin") {
-      toast.error("Admin signup is managed in Supabase. Please log in with an approved admin account.");
-      setTab("login");
-      return;
-    }
-
     const fd = new FormData(e.currentTarget);
     const values = {
       full_name: String(fd.get("full_name") || ""),
@@ -170,10 +164,13 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
       college_name: String(fd.get("college_name") || ""),
       contact: String(fd.get("contact") || ""),
     };
-    const parsed = studentSignupSchema.safeParse({
-      ...values,
-      ...studentDetails,
-    });
+    const parsed =
+      roleTab === "student"
+        ? studentSignupSchema.safeParse({
+            ...values,
+            ...studentDetails,
+          })
+        : baseSignupSchema.safeParse(values);
     if (!parsed.success) {
       toast.error(parsed.error.errors[0].message);
       return;
@@ -400,11 +397,9 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
             </Tabs>
 
             <Tabs value={tab} onValueChange={(v) => setTab(v as "login" | "signup")}>
-              <TabsList className={`grid w-full ${roleTab === "student" ? "grid-cols-2" : "grid-cols-1"}`}>
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Login</TabsTrigger>
-                {roleTab === "student" && (
-                  <TabsTrigger value="signup">Sign Up</TabsTrigger>
-                )}
+                <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
 
               <TabsContent value="login">
