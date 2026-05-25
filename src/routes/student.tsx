@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import type * as React from "react";
+import type { User } from "@supabase/supabase-js";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,44 @@ type CertificateRecord = {
   name: string;
   issuedAt: string;
 };
+
+function optionalText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getMetadataProfile(user: User): Profile {
+  const metadata = user.user_metadata || {};
+
+  return {
+    full_name: optionalText(metadata.full_name) || "Student",
+    email: user.email || optionalText(metadata.email) || "",
+    date_of_birth: optionalText(metadata.date_of_birth),
+    college_name: optionalText(metadata.college_name),
+    contact: optionalText(metadata.contact),
+  };
+}
+
+function mergeStudentProfile(profile: Profile | null, user: User): Profile {
+  const metadataProfile = getMetadataProfile(user);
+
+  return {
+    full_name: optionalText(profile?.full_name) || metadataProfile.full_name,
+    email: optionalText(profile?.email) || metadataProfile.email,
+    date_of_birth: optionalText(profile?.date_of_birth) || metadataProfile.date_of_birth,
+    college_name: optionalText(profile?.college_name) || metadataProfile.college_name,
+    contact: optionalText(profile?.contact) || metadataProfile.contact,
+  };
+}
+
+function hasProfileChanged(profile: Profile | null, mergedProfile: Profile) {
+  return (
+    optionalText(profile?.full_name) !== mergedProfile.full_name ||
+    optionalText(profile?.email) !== mergedProfile.email ||
+    optionalText(profile?.date_of_birth) !== mergedProfile.date_of_birth ||
+    optionalText(profile?.college_name) !== mergedProfile.college_name ||
+    optionalText(profile?.contact) !== mergedProfile.contact
+  );
+}
 
 function StudentDashboard() {
   const { user, role, loading, signOut } = useAuth();
@@ -134,10 +173,22 @@ function StudentDashboard() {
       .select("*")
       .eq("id", user.id)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         const nextProfile = data as Profile | null;
-        setProfile(nextProfile);
-        setCertificateName((current) => current || nextProfile?.full_name || "");
+        const mergedProfile = mergeStudentProfile(nextProfile, user);
+
+        setProfile(mergedProfile);
+        setCertificateName((current) => current || mergedProfile.full_name || "");
+
+        if (hasProfileChanged(nextProfile, mergedProfile)) {
+          await supabase.from("profiles").upsert(
+            {
+              id: user.id,
+              ...mergedProfile,
+            },
+            { onConflict: "id" }
+          );
+        }
       });
 
     supabase
