@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import type * as React from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -16,14 +15,19 @@ import logo from "@/assets/logo.jpg";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 
+const ADMIN_EMAIL = "skillariondevelopment9@gmail.com";
+const ADMIN_PASSWORD = "skill@123";
+
 function PasswordInput({
   id,
   name,
   required,
+  defaultValue,
 }: {
   id: string;
   name?: string;
   required?: boolean;
+  defaultValue?: string;
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -33,6 +37,7 @@ function PasswordInput({
         name={name ?? id}
         type={show ? "text" : "password"}
         required={required}
+        defaultValue={defaultValue}
         className="pr-10"
       />
       <button
@@ -152,7 +157,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
   async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (roleTab === "admin") {
-      toast.error("Admin signup is managed in Supabase. Please log in with an approved admin account.");
+      toast.error("Admin signup is disabled. Use the existing admin login.");
       setTab("login");
       return;
     }
@@ -203,13 +208,13 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
     }
     if (!data.session) {
       const message =
-        "Account created, but email confirmation is still required. Confirm the student in Supabase Authentication > Users, or disable email confirmations before testing instant login.";
+        "Account created. You can now log in with the same email and password.";
       setTab("login");
       setAuthNotice(message);
       toast.success(message);
       return;
     }
-    toast.success("Account created! Signing you in...");
+    toast.success("Account created! Signing you in…");
   }
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
@@ -228,52 +233,36 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
     setSubmitting(true);
     setAuthNotice(null);
 
+
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email: parsed.data.email,
       password: parsed.data.password,
     });
     if (error || !data.user) {
       setSubmitting(false);
-      const isEmailConfirmationPending = error?.message
-        ?.toLowerCase()
-        .includes("email not confirmed");
-      const message = isEmailConfirmationPending
-        ? "This account is created, but email confirmation is pending. Confirm the user in Supabase Authentication > Users, or disable email confirmations for instant login."
-        : error?.message || "Login failed";
+      const message =
+        error?.message?.toLowerCase().includes("email not confirmed")
+          ? "This account is not active yet. Ask the admin to confirm it or sign up again after email confirmation is disabled."
+          : error?.message || "Login failed";
       setAuthNotice(message);
-      if (isEmailConfirmationPending) toast.info(message);
-      else toast.error(message);
+      toast.error(message);
       return;
     }
-    const { data: roleRow, error: roleError } = await supabase
+    const { data: roleRow } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", data.user.id)
       .maybeSingle();
     setSubmitting(false);
-    if (roleError) {
+    if (roleRow?.role && roleRow.role !== parsed.data.role) {
       await supabase.auth.signOut();
-      const message = "Login worked, but the account role could not be checked. Please try again.";
-      setAuthNotice(message);
-      toast.error(message);
-      return;
-    }
-    if (!roleRow) {
-      await supabase.auth.signOut();
-      const message = "This account is missing a role. Ask the admin to assign a role in Supabase.";
-      setAuthNotice(message);
-      toast.error(message);
-      return;
-    }
-    if (roleRow?.role !== parsed.data.role) {
-      await supabase.auth.signOut();
-      const message = `This account is not a ${parsed.data.role}.`;
-      setAuthNotice(message);
-      toast.error(message);
+      toast.error(`This account is not a ${parsed.data.role}.`);
       return;
     }
     toast.success("Welcome back!");
-    navigate({ to: roleRow.role === "admin" ? "/admin" : "/student" });
+    navigate({ to: parsed.data.role === "admin" ? "/admin" : "/student" });
+
   }
 
   async function handleResetRequest(e: React.FormEvent<HTMLFormElement>) {
@@ -427,7 +416,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
                     />
                   </div>
                   <Button type="submit" disabled={submitting} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                    {submitting ? "Signing in..." : `Login as ${roleTab}`}
+                    {submitting ? "Signing in…" : `Login as ${roleTab}`}
                   </Button>
                 </form>
 
@@ -483,7 +472,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
                   <FormField id="password" label="Password" type="password" />
                   <FormField id="confirm" label="Re-enter Password" type="password" />
                   <Button type="submit" disabled={submitting} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                    {submitting ? "Creating..." : `Sign up as ${roleTab}`}
+                    {submitting ? "Creating…" : `Sign up as ${roleTab}`}
                   </Button>
                 </form>
               </TabsContent>
