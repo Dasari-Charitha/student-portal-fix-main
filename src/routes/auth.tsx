@@ -16,9 +16,6 @@ import logo from "@/assets/logo.jpg";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 
-const ADMIN_EMAIL = "skillariondevelopment9@gmail.com";
-const ADMIN_PASSWORD = "skill@123";
-
 function PasswordInput({
   id,
   name,
@@ -155,7 +152,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
   async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (roleTab === "admin") {
-      toast.error("Admin signup is disabled. Use the existing admin login.");
+      toast.error("Admin signup is managed in Supabase. Please log in with an approved admin account.");
       setTab("login");
       return;
     }
@@ -231,29 +228,6 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
     setSubmitting(true);
     setAuthNotice(null);
 
-    // Hardcoded admin login (bypasses Supabase)
-    if (parsed.data.role === "admin") {
-      if (
-        parsed.data.email === ADMIN_EMAIL &&
-        parsed.data.password === ADMIN_PASSWORD
-      ) {
-        try {
-          window.localStorage.setItem("skillarion_admin_session", "1");
-        } catch {
-          // ignore
-        }
-        setSubmitting(false);
-        toast.success("Welcome back, Admin!");
-        navigate({ to: "/admin" });
-        return;
-      }
-      setSubmitting(false);
-      const message = "Invalid admin credentials.";
-      setAuthNotice(message);
-      toast.error(message);
-      return;
-    }
-
     const { data, error } = await supabase.auth.signInWithPassword({
       email: parsed.data.email,
       password: parsed.data.password,
@@ -264,26 +238,42 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_or_publishable_key`}
         ?.toLowerCase()
         .includes("email not confirmed");
       const message = isEmailConfirmationPending
-        ? "This student account is created, but email confirmation is pending. Confirm the user in Supabase Authentication > Users, or disable email confirmations for instant login."
+        ? "This account is created, but email confirmation is pending. Confirm the user in Supabase Authentication > Users, or disable email confirmations for instant login."
         : error?.message || "Login failed";
       setAuthNotice(message);
       if (isEmailConfirmationPending) toast.info(message);
       else toast.error(message);
       return;
     }
-    const { data: roleRow } = await supabase
+    const { data: roleRow, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", data.user.id)
       .maybeSingle();
     setSubmitting(false);
+    if (roleError) {
+      await supabase.auth.signOut();
+      const message = "Login worked, but the account role could not be checked. Please try again.";
+      setAuthNotice(message);
+      toast.error(message);
+      return;
+    }
+    if (!roleRow) {
+      await supabase.auth.signOut();
+      const message = "This account is missing a role. Ask the admin to assign a role in Supabase.";
+      setAuthNotice(message);
+      toast.error(message);
+      return;
+    }
     if (roleRow?.role !== parsed.data.role) {
       await supabase.auth.signOut();
-      toast.error(`This account is not a ${parsed.data.role}.`);
+      const message = `This account is not a ${parsed.data.role}.`;
+      setAuthNotice(message);
+      toast.error(message);
       return;
     }
     toast.success("Welcome back!");
-    navigate({ to: "/student" });
+    navigate({ to: roleRow.role === "admin" ? "/admin" : "/student" });
   }
 
   async function handleResetRequest(e: React.FormEvent<HTMLFormElement>) {

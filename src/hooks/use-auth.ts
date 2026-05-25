@@ -6,18 +6,6 @@ import type { Session, User } from "@supabase/supabase-js";
 
 export type AppRole = "admin" | "student";
 
-export const ADMIN_LOCAL_KEY = "skillarion_admin_session";
-export const ADMIN_LOCAL_EMAIL = "skillariondevelopment9@gmail.com";
-
-function readLocalAdmin(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem(ADMIN_LOCAL_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -25,19 +13,6 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Local admin shortcut (works without Supabase configured)
-    if (readLocalAdmin()) {
-      const fakeUser = {
-        id: "local-admin",
-        email: ADMIN_LOCAL_EMAIL,
-        user_metadata: { full_name: "Administrator" },
-      } as unknown as User;
-      setUser(fakeUser);
-      setRole("admin");
-      setLoading(false);
-      return;
-    }
-
     if (!isSupabaseConfigured) {
       setLoading(false);
       return;
@@ -81,13 +56,6 @@ export function useAuth() {
   }
 
   async function signOut() {
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.removeItem(ADMIN_LOCAL_KEY);
-      } catch {
-        // ignore
-      }
-    }
     if (isSupabaseConfigured) {
       await supabase.auth.signOut();
     }
